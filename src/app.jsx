@@ -354,6 +354,149 @@ function AnalyzeTab() {
   );
 }
 
+// ── Cycle Summary Table ───────────────────────────────────────────────────────
+function buildCycleTableV2(instructions, pipeline, numCycles) {
+  const rows = [];
+  for (let c = 1; c <= numCycles; c++) {
+    const entry = { cycle: c, IF: "", ID: "", EX: "", MEM: "", WB: "" };
+    instructions.forEach((instr, idx) => {
+      const row = pipeline[idx] || {};
+      const cellVal = row[c];
+      if (!cellVal) return;
+      if (STAGES.includes(cellVal)) {
+        entry[cellVal] = instr;
+      } else if (cellVal === "IDLE" || cellVal === "CANCEL") {
+        const sortedKeys = Object.keys(row).map(Number).sort((a, b) => a - b);
+        const posInRow = sortedKeys.indexOf(c);
+        if (posInRow >= 0 && posInRow < STAGES.length) {
+          entry[STAGES[posInRow]] = cellVal === "IDLE" ? "IDLE" : "CANCEL";
+        }
+      }
+    });
+    rows.push(entry);
+  }
+  let last = rows.length - 1;
+  while (last > 0 && !STAGES.some(s => rows[last][s])) last--;
+  return rows.slice(0, last + 1);
+}
+
+function buildCSV(cycleRows) {
+  const header = ["Cycle", "IF", "ID", "EX", "MEM", "WB"].join(",");
+  const lines = cycleRows.map(r =>
+    [r.cycle, r.IF, r.ID, r.EX, r.MEM, r.WB].map(v => `"${v}"`).join(",")
+  );
+  return [header, ...lines].join("\n");
+}
+
+function CycleSummaryTable({ instructions, pipeline, numCycles }) {
+  const [copied, setCopied] = useState(false);
+  const cycleRows = buildCycleTableV2(instructions, pipeline, numCycles);
+
+  const handleCopy = () => {
+    const csv = buildCSV(cycleRows);
+    navigator.clipboard.writeText(csv).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const stageColColors = {
+    IF:  { bg: "#1e3a5f", text: "#93c5fd" },
+    ID:  { bg: "#1d4e3f", text: "#6ee7b7" },
+    EX:  { bg: "#4a1942", text: "#f0abfc" },
+    MEM: { bg: "#7a2d00", text: "#fdba74" },
+    WB:  { bg: "#14532d", text: "#86efac" },
+  };
+
+  const getCellStyle = (val) => {
+    if (!val) return { color: "#1e293b" };
+    if (val === "IDLE") return { color: "#475569", fontStyle: "italic", background: "#f8ac71" };
+    if (val === "CANCEL") return { color: "#475569", fontStyle: "italic", background: "#f8d471" };
+    return { color: "#e2e8f0", fontWeight: 600 };
+  };
+
+  const displayVal = (val) => {
+    if (!val) return <span style={{ color: "#1e293b" }}>·</span>;
+    if (val === "IDLE") return <span>— idle</span>;
+    if (val === "CANCEL") return <span>✕ canceled</span>;
+    return val;
+  };
+
+  return (
+    <div style={{ marginTop: 36 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 10, gap: 12 }}>
+        <div style={{ fontSize: 11, letterSpacing: 3, color: "#475569", flex: 1 }}>CYCLE SUMMARY TABLE</div>
+        <button onClick={handleCopy} style={{
+          padding: "5px 18px",
+          background: copied ? "#14532d" : "#0f2d1a",
+          color: copied ? "#86efac" : "#4ade80",
+          border: "1px solid #166534",
+          borderRadius: 4, cursor: "pointer", fontSize: 11,
+          fontFamily: "inherit", fontWeight: 700, transition: "all 0.2s",
+          letterSpacing: 0.5,
+        }}>
+          {copied ? "✓ COPIED!" : "⎘ COPY CSV"}
+        </button>
+      </div>
+
+      <div style={{ overflowX: "auto", background: "#0a1628", border: "1px solid #1e293b", borderRadius: 6 }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{
+                padding: "9px 16px", textAlign: "center", background: "#080f1e",
+                color: "#475569", borderBottom: "1px solid #1e293b",
+                borderRight: "1px solid #1e293b", fontSize: 10, letterSpacing: 3, minWidth: 64,
+              }}>CYCLE</th>
+              {STAGES.map(s => {
+                const sc = stageColColors[s];
+                return (
+                  <th key={s} style={{
+                    padding: "9px 16px", textAlign: "center", minWidth: 170,
+                    background: sc.bg, color: sc.text,
+                    borderBottom: "1px solid #1e293b", borderRight: "1px solid #0f172a",
+                    fontSize: 11, fontWeight: 800, letterSpacing: 1,
+                  }}>{s}</th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {cycleRows.map((row, i) => {
+              const hasActivity = STAGES.some(s => row[s]);
+              return (
+                <tr key={i} style={{ background: i % 2 === 0 ? "#0a1628" : "#070e1c" }}>
+                  <td style={{
+                    padding: "7px 16px", textAlign: "center", fontWeight: 800,
+                    color: hasActivity ? "#38bdf8" : "#1e3a5f",
+                    borderBottom: "1px solid #0f172a", borderRight: "1px solid #1e293b", fontSize: 12,
+                  }}>{row.cycle}</td>
+                  {STAGES.map(s => {
+                    const val = row[s];
+                    const cs = getCellStyle(val);
+                    return (
+                      <td key={s} style={{
+                        padding: "7px 16px", textAlign: "center",
+                        borderBottom: "1px solid #0f172a", borderRight: "1px solid #0f172a",
+                        fontSize: 11, ...cs,
+                      }}>
+                        {displayVal(val)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontSize: 10, color: "#334155", marginTop: 6 }}>
+        CSV format: Cycle, IF, ID, EX, MEM, WB — paste directly into Excel or Google Sheets
+      </div>
+    </div>
+  );
+}
+
 // ── TAB 2: Simulate ───────────────────────────────────────────────────────────
 function SimulateTab() {
   const [code, setCode] = useState(DEFAULT_CODE);
@@ -495,6 +638,8 @@ function SimulateTab() {
             })}
           </div>
         </div>
+
+        <CycleSummaryTable instructions={instructions} pipeline={pipeline} numCycles={numCycles} />
       </>)}
 
       {!parsed && (
