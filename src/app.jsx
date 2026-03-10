@@ -410,8 +410,8 @@ function CycleSummaryTable({ instructions, pipeline, numCycles }) {
 
   const getCellStyle = (val) => {
     if (!val) return { color: "#1e293b" };
-    if (val === "IDLE") return { color: "#475569", fontStyle: "italic", background: "#f8ac71" };
-    if (val === "CANCEL") return { color: "#475569", fontStyle: "italic", background: "#f8d471" };
+    if (val === "IDLE") return { color: "#f2dea2", fontStyle: "italic", background: "#918246" };
+    if (val === "CANCEL") return { color: "#f2d0a2", fontStyle: "italic", background: "#8c6241" };
     return { color: "#e2e8f0", fontWeight: 600 };
   };
 
